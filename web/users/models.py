@@ -1,5 +1,5 @@
 from django.db import models
-from web.products import Product
+from products.models import Product
 
 
 class User(models.Model):
@@ -14,6 +14,8 @@ class User(models.Model):
 
     class Meta:
         db_table = 'users_user'
+        verbose_name = "Клиент"
+        verbose_name_plural = "Клиенты"
 
 
 class Cart(models.Model):
@@ -23,13 +25,14 @@ class Cart(models.Model):
                                 on_delete=models.CASCADE,
                                 related_name="cart",
                                 null=False)
-    created_at = models.DateTimeField(auto_now_add=True, null=False)
 
     def __str__(self):
         return f"Корзина пользователя {self.user.tg_id}"
 
     class Meta:
         db_table = 'users_cart'
+        verbose_name = "Корзина клиента"
+        verbose_name_plural = "Корзины клиентов"
 
 
 class CartItem(models.Model):
@@ -49,3 +52,14 @@ class CartItem(models.Model):
 
     class Meta:
         db_table = 'users_cartitem'
+
+
+class Broadcast(models.Model):
+    """Фиктивная модель для рассылок в админке"""
+    class Meta:
+        verbose_name = "Рассылка"
+        verbose_name_plural = "Рассылки"
+        managed = False  # не создавать таблицу для модели
+
+    def __str__(self):
+        return "Рассылка"

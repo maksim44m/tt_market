@@ -1,4 +1,5 @@
 services:
+
   postgres:
     image: postgres:15
     restart: unless-stopped  # always чтобы перезапускался постоянно
@@ -6,6 +7,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "unixgram:///dev/log"
     ports:
       - "5432:5432"
     volumes:
@@ -15,7 +20,10 @@ services:
     build: ./web
     command: >
       bash -c ' 
-        sleep 5 && 
+        while ! nc -zv postgres 5432; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done && 
         python manage.py migrate && 
         uvicorn web.asgi:application --host 0.0.0.0 --port 8000 --workers 1
       '
@@ -25,18 +33,33 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "unixgram:///dev/log"
     depends_on:
       - postgres
 
   bot:
     build: ./bot
-    command: bash -c "sleep 5 && python main.py"
+    command: >
+      bash -c '
+        sleep 5 && python main.py && 
+        uvicorn bot.core.bot_api:app --host 0.0.0.0 --port 8001 --workers 1
+      '
     volumes:
       - ./bot:/code
+    ports:
+      - "8001:8001"
     env_file:
       - .env
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "unixgram:///dev/log"
     depends_on:
       - postgres
+      - web
 
 volumes:
   postgres_data:

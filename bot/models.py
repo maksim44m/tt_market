@@ -1,5 +1,5 @@
-from sqlalchemy import (Column, BigInteger, String, Integer, DateTime,
-                        func, ForeignKey, Text, DECIMAL, text)
+from sqlalchemy import (Column, BigInteger, String, Integer,
+                        ForeignKey, Text, DECIMAL, text, CheckConstraint)
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -18,8 +18,10 @@ class User(Base):
     username = Column(String(length=32), nullable=True)
 
     # Связь один к одному с корзиной: uselist=False говорит, что это один объект, а не список.
-    cart = relationship('Cart', back_populates='user', uselist=False)
-    orders = relationship('Order', back_populates='user')
+    cart = relationship('Cart', back_populates='user', uselist=False,
+                        cascade="all, delete-orphan", passive_deletes=True)
+    orders = relationship('Order', back_populates='user',
+                          cascade="all, delete-orphan", passive_deletes=True)
 
 
 class Cart(Base):
@@ -32,10 +34,10 @@ class Cart(Base):
         unique=True,
         nullable=False
     )
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
     user = relationship("User", back_populates='cart')
-    cartitems = relationship("CartItem", back_populates='cart')
+    cartitems = relationship("CartItem", back_populates='cart',
+                             cascade="all, delete-orphan", passive_deletes=True)
 
 
 class CartItem(Base):
@@ -104,20 +106,30 @@ class Product(Base):
     subcategory = relationship("SubCategory", back_populates='products')
 
 
+class OrderStatus:
+    NOT_PAID: str = 'Не оплачен'
+    PAID: str = 'Оплачен'
+    COMPLETED: str = 'Выполнен'
+
+
 class Order(Base):
     __tablename__ = 'orders_order'
     id = Column(Integer, primary_key=True)
-    user_id = Column(
-        Integer,
-        ForeignKey('users_user.id', ondelete='CASCADE'),
-        nullable=False
-    )
+    user_id = Column(Integer,
+                     ForeignKey('users_user.id', ondelete='CASCADE'),
+                     nullable=False)
     delivery = Column(String, server_default=text("'Самовывоз'"), nullable=False)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    status = Column(String(length=20), server_default=text("'Новый'"), nullable=False)
+    payment_id = Column(String(length=255), nullable=True)
+    status = Column(String(10), default='Не оплачен', nullable=False)
+    __table_args__ = (CheckConstraint("status IN ("
+                                      f"'{OrderStatus.NOT_PAID}', "
+                                      f"'{OrderStatus.PAID}', "
+                                      f"'{OrderStatus.COMPLETED}')",
+                                      name='order_status_check'),)
 
     user = relationship('User', back_populates='orders')
-    orderitems = relationship('OrderItem', back_populates='order')
+    orderitems = relationship('OrderItem', back_populates='order',
+                              cascade="all, delete-orphan", passive_deletes=True)
 
 
 class OrderItem(Base):

@@ -21,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-rjwt3u_s9@v&q9=v=(c8+)+sl1-rx(f%kl#$kxiyyi7q9d*lb%'
+SECRET_KEY = os.getenv('SECRET_KEY_DJANGO')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -32,6 +32,10 @@ ALLOWED_HOSTS = ["195.128.158.105", "localhost", "127.0.0.1"]
 # Application definition
 
 INSTALLED_APPS = [
+    'whitenoise.runserver_nostatic',  # ^ pip install whitenoise
+    "admin_interface",  # django-admin-interface
+    "colorfield",  # django-admin-interface
+
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -39,13 +43,17 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    'orders',
-    'products',
-    'users',
+    'orders.apps.OrdersConfig',
+    'products.apps.ProductsConfig',
+    'users.apps.UsersConfig',
 ]
+
+X_FRAME_OPTIONS = "SAMEORIGIN"  # for django-admin-interface
+SILENCED_SYSTEM_CHECKS = ["security.W019"]  # for django-admin-interface
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # whitenoise
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -56,10 +64,12 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'web.urls'
 
+BOT_BROADCAST_URL = "http://bot:8001/api/broadcast/"
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / "templates"],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -112,11 +122,13 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'ru'  # 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Europe/Moscow'  # 'UTC'
 
 USE_I18N = True
+
+USE_L10N = True  # форматирование дат, чисел и прочей информации в соответствии с языковыми настройками
 
 USE_TZ = True
 
@@ -125,6 +137,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
