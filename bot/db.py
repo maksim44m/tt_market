@@ -58,31 +58,10 @@ class DB:
             result = await session.execute(query)
             return list(result.scalars().all())
 
-    async def get_product_quantity(self, user_id: int, product_id: int) -> int:
-        async with self.SessionLocal() as session:  # type: AsyncSession
-            result = await session.execute(
-                select(CartItem.quantity)
-                .join(Cart)
-                .where(Cart.user_id == literal(user_id),
-                       CartItem.product_id == literal(product_id))
-            )
-            quantity = result.scalar()
-        return quantity if quantity is not None else 0
-
-    async def get_all_products_in_subcategory(
-            self, subcategory_id: int
-    ) -> List[Product]:
-        async with self.SessionLocal() as session:  # type: AsyncSession
-            result = await session.execute(
-                select(Product).where(
-                    Product.subcategory_id == literal(subcategory_id))
-            )
-            return list(result.scalars().all())
-
-    async def get_products_with_quantities(
+    async def get_cart_item_qty(
             self, subcategory_id: int, tg_id: int
     ) -> List[Tuple[Product, int]]:
-        async with self.get_session() as session:
+        async with self.get_session() as session:  # type: AsyncSession
             result = await session.execute(
                 select(Product, CartItem.quantity)
                 .outerjoin(
@@ -98,8 +77,8 @@ class DB:
             )
             rows = result.all()
 
-            return [(product, quantity if quantity is not None else 0)
-                    for product, quantity in rows]
+        return [(product, quantity if quantity is not None else 0)
+                for product, quantity in rows]
 
     async def get_cart_items_with_quantities(
             self, tg_id: int

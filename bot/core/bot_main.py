@@ -263,6 +263,7 @@ async def save_message_cache(state: FSMContext, message_id: int,
 async def send_product_menu(products_with_qty: List[Tuple[Product, int]],
                             tg_id: int, state: FSMContext, bot: Bot):
     """Отправка отдельных сообщений с продуктами"""
+    await cache_handling(tg_id, state, bot)
     for product, quantity in products_with_qty:
         # формирование инлайн кнопок
         kb = await build_quantity_kb(product.id, quantity)
@@ -285,26 +286,53 @@ async def product_choice(callback: types.CallbackQuery,
                          state: FSMContext, bot: Bot):
     """Обработчик выбора подкатегории. Вывод товаров"""
     tg_id = callback.from_user.id
+    page = 1
+    page_size = 5
+
+    # Разбор callback_data для получения subcategory_id и номера страницы
+    if '_page_' in callback.data:
+        cb_start, page_str = callback.data.split('_page_')
+        page = int(page_str)
+        if page < 1:
+            return
+        subcategory_id = int(cb_start.split("_id_")[1])
+    else:
+        subcategory_id = int(callback.data.split("_id_")[1])
+
+    cart_item_qty = await db.get_cart_item_qty(subcategory_id, tg_id)
+
+    total_page = (len(cart_item_qty) + page_size - 1) // page_size
+    # пример: (11+5-1)//5=3; (10+5-1)//5=2
+    offset = (page - 1) * page_size
+
     await callback.message.delete()
-    subcategory_id = int(callback.data.split("_id_")[1])
-    products_with_qty = await db.get_products_with_quantities(
-        subcategory_id, tg_id
-    )
-    await send_product_menu(products_with_qty, tg_id, state, bot)
-    # сообщение с подтверждением выбора
+    await send_product_menu(cart_item_qty[offset:offset + page_size],
+                            tg_id, state, bot)
+
+    if page < total_page:
+        cb_data_up = f"subcategory_id_{subcategory_id}_page_{page + 1}"
+    else:
+        cb_data_up = "noop"
+
+    if page > 1:
+        cb_data_down = f"subcategory_id_{subcategory_id}_page_{page - 1}"
+    else:
+        cb_data_down = "noop"
+
+    # сообщение с пагинацией и подтверждением выбора
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Подтвердить", callback_data="show_cart"),
-         InlineKeyboardButton(text="Главное меню", callback_data="back_to_menu")]
+        [InlineKeyboardButton(text="⏪", callback_data=cb_data_down),
+         InlineKeyboardButton(text=f"стр. {page} из {total_page}", callback_data="noop"),
+         InlineKeyboardButton(text="⏩", callback_data=cb_data_up)],
+        [InlineKeyboardButton(text="Подтвердить", callback_data="show_cart")],
+        [InlineKeyboardButton(text="Главное меню", callback_data="back_to_menu")]
     ])
-    await bot.send_message(
-        chat_id=tg_id,
-        text=f'Для продолжения оформления заказа нажмите\n"Подтвердить":',
-        reply_markup=kb
-    )
+    text = f'Для продолжения оформления заказа нажмите\n"Подтвердить":'
+    await bot.send_message(chat_id=tg_id, text=text, reply_markup=kb)
 
 
 @router.callback_query(F.data == "category_choice")
-async def category_choice(callback: types.CallbackQuery, state: FSMContext):
+async def category_choice(callback: types.CallbackQuery):
     """Обработчик выбора раздела Каталог в главном меню. Вывод категорий"""
     category_kb = await build_category_menu()
     await callback.message.edit_text('Выберете категорию:',
@@ -312,7 +340,7 @@ async def category_choice(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("category_id_"))
-async def subcategory_choice(callback: types.CallbackQuery, state: FSMContext):
+async def subcategory_choice(callback: types.CallbackQuery):
     """Обработчик выбора категории. Вывод подкатегорий"""
     category_id = int(callback.data.split("_id_")[1])
     subcategory_kb = await build_category_menu(category_id)
@@ -324,15 +352,15 @@ async def build_category_menu(category_id: int = 0) -> InlineKeyboardMarkup:
     """Сборка кнопок категорий (если задано значение category_id, то подкатегорий"""
     if category_id:
         categories = await db.get_categories(SubCategory, category_id)
-        kb_data_startswith = 'subcategory_id_'
+        cb_name = 'subcategory_id_'
     else:
         categories = await db.get_categories(Category)
-        kb_data_startswith = 'category_id_'
+        cb_name = 'category_id_'
     kb = InlineKeyboardMarkup(inline_keyboard=[])
     for category in categories:
         button = InlineKeyboardButton(
             text=category.name,
-            callback_data=f"{kb_data_startswith}{category.id}"
+            callback_data=f"{cb_name}{category.id}"
         )
         kb.inline_keyboard.append([button])
     # добавление кнопки возврата в главное меню
