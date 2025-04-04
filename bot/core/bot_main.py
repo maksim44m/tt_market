@@ -305,7 +305,10 @@ async def product_choice(callback: types.CallbackQuery,
     # пример: (11+5-1)//5=3; (10+5-1)//5=2
     offset = (page - 1) * page_size
 
-    await callback.message.delete()
+    try:
+        await callback.message.delete()
+    except Exception as e:
+        logger.error(f"Не удалось удалить сообщение: {e}")
     await send_product_menu(cart_item_qty[offset:offset + page_size],
                             tg_id, state, bot)
 
