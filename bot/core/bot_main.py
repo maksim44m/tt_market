@@ -188,7 +188,7 @@ async def show_cart(callback: types.CallbackQuery, state: FSMContext, bot: Bot):
         ])
         await bot.send_message(
             chat_id=tg_id,
-            text=f'Для продолжения оформления заказа нажмите\n"Подтвердить":',
+            text=f'Для продолжения оформления заказа выберите способ доставки:',
             reply_markup=kb
         )
     except Exception as e:
