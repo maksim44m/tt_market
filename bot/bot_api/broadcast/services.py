@@ -1,12 +1,9 @@
 import asyncio
 from typing import Tuple
 
-from fastapi import FastAPI  # pip install fastapi
 from pydantic import BaseModel
 
 from settings import db, bot, logger
-
-app = FastAPI()
 
 
 class BroadcastRequest(BaseModel):
@@ -32,9 +29,3 @@ async def broadcast_message(message_text: str) -> Tuple[str, list]:
              f'Отправлено сообщений: {count}\n'
              f'Ошибок отправки: {len(errors)}'),
             errors)
-
-
-@app.post(path="/api/broadcast/")
-async def broadcast(request: BroadcastRequest):
-    msg, errors = await broadcast_message(request.message)
-    return {"status": "ok", 'message': msg, 'errors': errors}

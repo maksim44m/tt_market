@@ -2,7 +2,6 @@ from django.db import models
 
 
 class Category(models.Model):
-    id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=255, null=False)
 
     def __str__(self):
@@ -15,7 +14,6 @@ class Category(models.Model):
 
 
 class SubCategory(models.Model):
-    id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
     category = models.ForeignKey(Category,
                                  related_name='subcategories',
@@ -33,7 +31,6 @@ class SubCategory(models.Model):
 
 
 class Product(models.Model):
-    id = models.AutoField(primary_key=True)
     category = models.ForeignKey(Category,
                                  related_name='products',
                                  on_delete=models.CASCADE,

@@ -3,10 +3,9 @@ from products.models import Product
 
 
 class User(models.Model):
-    id = models.AutoField(primary_key=True)
     tg_id = models.BigIntegerField(unique=True, null=False)
-    first_name = models.CharField(null=True)
-    last_name = models.CharField(null=True)
+    first_name = models.CharField(max_length=255, null=True)
+    last_name = models.CharField(max_length=255, null=True)
     username = models.CharField(max_length=32, null=True, blank=True)
 
     def __str__(self):
@@ -20,7 +19,6 @@ class User(models.Model):
 
 class Cart(models.Model):
     """Корзина пользователя со связью 1:1"""
-    id = models.AutoField(primary_key=True)
     user = models.OneToOneField(User,
                                 on_delete=models.CASCADE,
                                 related_name="cart",
@@ -37,7 +35,6 @@ class Cart(models.Model):
 
 class CartItem(models.Model):
     """Товары в корзинах со связями корзин 1:М и продуктов 1:М"""
-    id = models.AutoField(primary_key=True)
     cart = models.ForeignKey(Cart,
                              on_delete=models.CASCADE,
                              related_name="items",

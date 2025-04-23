@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 import random
 from typing import AsyncIterator, List, Tuple, Union, Type, Optional
 
-from sqlalchemy import select, literal, and_
+from sqlalchemy import select, literal, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker, selectinload  # pip install SQLAlchemy psycopg2-binary
 
@@ -24,13 +24,13 @@ class DB:
                                          future=True,
                                          expire_on_commit=False)
 
-    @asynccontextmanager  # для создания аснихронного контекстного менеджера
+    @asynccontextmanager  # для создания контекстного менеджера
     async def get_session(self) -> AsyncIterator[AsyncSession]:
         """
         Асинхронный генератор сессий. Работает как контекстный менеджер
         благодаря @asynccontextmanager.
         """
-        async with self.SessionLocal() as session:  
+        async with self.SessionLocal() as session:
             async with session.begin():
                 try:
                     yield session
@@ -39,11 +39,15 @@ class DB:
                     raise e
 
     async def get_user_by_tg_id(self, tg_id: int) -> Optional[User]:
-        async with self.get_session() as session:  
-            result = await session.execute(
-                select(User).where(User.tg_id == literal(tg_id))
-            )
-            return result.scalars().first()
+        async with self.get_session() as session:
+            stmt = text("""
+                SELECT * FROM users_user
+                WHERE tg_id = :tg_id
+            """)
+            params = {'tg_id': tg_id}
+            result = await session.execute(stmt, params=params)
+            row = result.mappings().first()
+            return User(**row) if row else None
         
     async def add_user(self, user: User) -> None:
         async with self.get_session() as session:
@@ -54,7 +58,7 @@ class DB:
             current_category: Type[Union[SubCategory, Category]],
             category_id: Optional[int] = None
     ) -> List[Union[Category, SubCategory]]:
-        async with self.get_session() as session:
+        async with self.get_session() as session:  # type: AsyncSession
             query = select(current_category)
             # Если передан category_id и ищем подкатегории, добавляем фильтр
             if category_id is not None and current_category == SubCategory:
@@ -65,7 +69,7 @@ class DB:
     async def get_cart_item_qty(
             self, subcategory_id: int, tg_id: int
     ) -> List[Tuple[Product, int]]:
-        async with self.get_session() as session:  
+        async with self.get_session() as session:  # type: AsyncSession
             result = await session.execute(
                 select(Product, CartItem.quantity)
                 .outerjoin(
@@ -84,10 +88,34 @@ class DB:
         return [(product, quantity if quantity is not None else 0)
                 for product, quantity in rows]
 
+    async def get_cart_item_qty(
+            self, subcategory_id: int, tg_id: int
+    ) -> List[Tuple[Product, int]]:
+        query = text("""
+            SELECT pp.*, qty
+            FROM products_product AS pp
+            LEFT JOIN (
+                SELECT ci.product_id AS id, ci.quantity AS qty
+                FROM users_cartitem AS ci
+                JOIN users_cart AS c ON c.id = ci.cart_id
+                JOIN users_user AS u ON u.id = c.user_id
+                WHERE u.tg_id = tg_id
+            ) AS cartitem USING (id)
+            JOIN products_subcategory AS ps ON pp.subcategory_id = ps.id
+            WHERE pp.subcategory_id = :subcategory_id
+        """)
+        params = {'tg_id': tg_id, 'subcategory_id': subcategory_id}
+        async with self.get_session() as session:  # type: AsyncSession
+            result = await session.execute(query, params=params)
+            rows = result.all()
+
+        return [(product, quantity if quantity is not None else 0)
+                for product, quantity in rows]
+
     async def get_cart_items_with_quantities(
             self, tg_id: int
     ) -> List[Tuple[Product, int]]:
-        async with self.get_session() as session:
+        async with self.get_session() as session:  # type: AsyncSession
             result = await session.execute(
                 select(Product, CartItem.quantity)
                 .join(CartItem, Product.id == CartItem.product_id)
@@ -97,10 +125,26 @@ class DB:
             )
             return [(row[0], row[1]) for row in result.all()]
 
+    async def get_cart_items_with_quantities(
+            self, tg_id: int
+    ) -> List[Tuple[Product, int]]:
+        query = text("""
+            SELECT pp.*, ci.quantity
+            FROM users_cartitem AS ci
+            JOIN users_cart AS c ON c.id = ci.cart_id
+            JOIN users_user AS u ON u.id = c.user_id
+            JOIN products_product AS pp ON pp.id = ci.product_id
+            WHERE ci.quantity > 0 AND u.tg_id = :tg_id
+        """)
+        params = {'tg_id': tg_id}
+        async with self.get_session() as session:  # type: AsyncSession
+            result = await session.execute(query, params=params)
+            return [(row[0], row[1]) for row in result.all()]
+
     async def save_current_quantity_in_cart(
             self, tg_id: int, items: List[Tuple[int, int, int]],  # (message_id, product_id, quantity)
     ):
-        async with self.get_session() as session:
+        async with self.get_session() as session:  # type: AsyncSession
             user = await self.get_user_by_tg_id(tg_id)
             # Получение корзины пользователя
             result = await session.execute(
@@ -137,7 +181,7 @@ class DB:
                 logger.error(f'Error save_current_quantity_in_cart (for): {e}')
 
     async def create_order_db(self, tg_id: int, delivery_info: str) -> int:
-        async with self.get_session() as session:
+        async with self.get_session() as session:  # type: AsyncSession
             # Получение корзины пользователя с загрузкой связанных элементов (cartitems)
             result = await session.execute(
                 select(Cart)
@@ -166,7 +210,7 @@ class DB:
             return order.id
 
     async def get_orders_by_user(self, tg_id: int) -> list[Order]:
-        async with self.get_session() as session:
+        async with self.get_session() as session:  # type: AsyncSession
             result = await session.execute(
                 select(Order)
                 .join(User, Order.user_id == User.id)
@@ -175,21 +219,23 @@ class DB:
             orders = result.scalars().all()
             return list(orders)
 
+
+
     async def get_order_by_id(self, order_id: int) -> Optional[Order]:
-        async with self.get_session() as session:
+        async with self.get_session() as session:  # type: AsyncSession
             result = await session.execute(
                 select(Order).where(Order.id == literal(order_id))
             )
             return result.scalars().first()
 
     async def delete_order(self, order_id: int):
-        async with self.get_session() as session:
+        async with self.get_session() as session:  # type: AsyncSession
             order = await session.get(Order, order_id, options=[selectinload(Order.orderitems)])
             if order:
                 await session.delete(order)
 
     async def set_order_status(self, order_id: int, status: OrderStatus):
-        async with self.get_session() as session:
+        async with self.get_session() as session:  # type: AsyncSession
             result = await session.execute(
                 select(Order).where(Order.id == literal(order_id))
             )
@@ -198,7 +244,7 @@ class DB:
                 order.status = status
 
     async def set_order_payment_id(self, order_id: int, payment_id: str):
-        async with self.get_session() as session:
+        async with self.get_session() as session:  # type: AsyncSession
             result = await session.execute(
                 select(Order).where(Order.id == literal(order_id))
             )
@@ -207,7 +253,7 @@ class DB:
                 order.payment_id = payment_id
 
     async def get_order_sum(self, order_id: int) -> Tuple[int, Order]:
-        async with self.get_session() as session:
+        async with self.get_session() as session:  # type: AsyncSession
             result = await session.execute(
                 select(Order)
                 .options(selectinload(Order.orderitems)
@@ -221,13 +267,13 @@ class DB:
         return total, order
 
     async def get_all_tg_ids(self) -> list[int]:
-        async with self.get_session() as session:
+        async with self.get_session() as session:  # type: AsyncSession
             result = await session.execute(select(User.tg_id))
             return list(result.scalars().all())
 
     async def seed_db(self):
         try:
-            async with self.get_session() as session:
+            async with self.get_session() as session:  # type: AsyncSession
                 for cat_num in range(1, 6):
                     # Создаем категорию
                     category = Category(name=f"Категория {cat_num}")

@@ -23,9 +23,9 @@ services:
         while ! nc -zv postgres 5432; do
           echo "Waiting for PostgreSQL..."
           sleep 2
-        done && 
+        done &&  
         python manage.py migrate && 
-        uvicorn web.asgi:application --host 0.0.0.0 --port 8000 --workers 1
+        exec uvicorn web.asgi:application --host 0.0.0.0 --port 8000 --workers 1
       '
     volumes:
       - ./web:/code
@@ -45,7 +45,7 @@ services:
     command: >
       bash -c '
         sleep 5 && python main.py && 
-        uvicorn bot.core.bot_api:app --host 0.0.0.0 --port 8001 --workers 1
+        exec uvicorn bot.core.bot_api:app --host 0.0.0.0 --port 8001 --workers 1
       '
     volumes:
       - ./bot:/code

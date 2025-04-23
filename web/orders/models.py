@@ -7,7 +7,6 @@ from products.models import Product
 
 
 class Order(models.Model):
-    id = models.AutoField(primary_key=True)
     user = models.ForeignKey(User,
                              on_delete=models.CASCADE,
                              related_name='order',
@@ -37,7 +36,6 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
-    id = models.AutoField(primary_key=True)
     order = models.ForeignKey(Order,
                               on_delete=models.CASCADE,
                               related_name='items',

@@ -2,19 +2,28 @@ import asyncio
 
 from aiogram import Dispatcher  # pip install aiogram
 
-from core import bot_main, bot_pay, bot_faq, bot_api
-from settings import bot
+from bot_worker import (start_menu, 
+                        products,
+                        cart, 
+                        orders, 
+                        payments, 
+                        faq)
+from bot_api import broadcast
+from settings import bot  # , db
 
 dp = Dispatcher()
-dp.include_routers(bot_main.router,
-                   bot_pay.router,
-                   bot_faq.router)
+dp.include_routers(start_menu.router,
+                   products.router,
+                   cart.router,
+                   payments.router,
+                   orders.router,
+                   faq.router)
 
 
 async def run_uvicorn():
     """Создание и запуск сервера для вызова в цикле событий"""
     import uvicorn
-    config = uvicorn.Config(app=bot_api.app,
+    config = uvicorn.Config(app=broadcast.app,
                             host="0.0.0.0",
                             port=8001,
                             reload=False,

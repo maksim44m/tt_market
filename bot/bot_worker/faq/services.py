@@ -1,28 +1,22 @@
-from aiogram import F, Router
-from aiogram import types
 from aiogram.types import (InlineQueryResultArticle,
                            InputTextMessageContent,
-                           InlineKeyboardButton,
-                           InlineKeyboardMarkup)
-from aiogram.fsm.context import FSMContext
+                           CallbackQuery,
+                           InlineQuery)
 import uuid
 
+from bot_worker.util.helpers import kb_builder
 from settings import logger
 
 
-router = Router()
-
-
-@router.callback_query(F.data == "faq")
-async def faq(callback: types.CallbackQuery, state: FSMContext):
+async def faq(callback: CallbackQuery) -> None:
     faq_data = await search_faq('')
     text = "\n\n".join([
         f"**Вопрос:** {faq['question']}\n**Ответ:** {faq['answer']}"
         for faq in faq_data
     ])
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Главное меню", callback_data="back_to_menu")]
+    kb = await kb_builder(kb_values=[
+        [{"text": "Главное меню", "callback_data": "back_to_menu"}]
     ])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
 
@@ -47,8 +41,7 @@ async def search_faq(query: str) -> list:
         return faqs
 
 
-@router.inline_query()
-async def inline_faq_handler(inline_query: types.InlineQuery):
+async def inline_faq_handler(inline_query: InlineQuery) -> None:
     try:
         query_text = inline_query.query.strip()
         results = []
